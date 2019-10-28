@@ -1,0 +1,383 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+name: sonarqube-persistent
+labels:
+  app: sonarqube-persistent
+  template: sonarqube-persistent-template
+message: Welcome to SonarQube! This is a custom docker image with RHEL. Login using the following credentials admin/admin
+metadata:
+  annotations:
+    description: |-
+      sonarqube application with persistent storage.
+
+      NOTE: You must have persistent volumes available in your cluster to use this template.
+    iconClass: icon-jenkins
+    openshift.io/display-name: sonarqube-rhel
+    openshift.io/documentation-url: https://docs.sonarqube.org/latest/
+    openshift.io/long-description: This template deploys a sonarqube application.
+    openshift.io/provider-display-name: Red Hat, Inc.
+    openshift.io/support-url: https://access.redhat.com
+    tags: instant-app,sonarqube-rhel
+  name: sonarqube-persistent
+objects:
+  - apiVersion: v1
+    stringData:
+      database-name: ${POSTGRESQL_DATABASE}
+      database-password: ${POSTGRESQL_PASSWORD}
+      database-user: ${POSTGRESQL_USERNAME}
+    kind: Secret
+    metadata:
+      annotations:
+        openshift.io/generated-by: OpenShiftNewApp
+        template.openshift.io/expose-database_name: '{.data[''database-name'']}'
+        template.openshift.io/expose-password: '{.data[''database-password'']}'
+        template.openshift.io/expose-username: '{.data[''database-user'']}'
+      labels:
+        app: ${SONAR_SERVICE_NAME}
+        template: postgresql-persistent-template
+      name: postgresql-${SONAR_SERVICE_NAME}
+    type: Opaque
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      annotations:
+        openshift.io/generated-by: OpenShiftNewApp
+        template.openshift.io/expose-uri: postgres://{.spec.clusterIP}:{.spec.ports[?(.name=="postgresql")].port}
+      creationTimestamp: null
+      labels:
+        app: ${SONAR_SERVICE_NAME}
+        template: postgresql-persistent-template
+      name: postgresql-${SONAR_SERVICE_NAME}
+    spec:
+      ports:
+        - name: postgresql
+          port: 5432
+          protocol: TCP
+          targetPort: 5432
+      selector:
+        name: postgresql-${SONAR_SERVICE_NAME}
+      sessionAffinity: None
+      type: ClusterIP
+    status:
+      loadBalancer: {}
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      annotations:
+        openshift.io/generated-by: OpenShiftNewApp
+      creationTimestamp: null
+      labels:
+        app: ${SONAR_SERVICE_NAME}
+        template: postgresql-persistent-template
+      name: postgresql-${SONAR_SERVICE_NAME}
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 10Gi
+    status:
+      phase: Pending
+  - apiVersion: apps.openshift.io/v1
+    kind: DeploymentConfig
+    metadata:
+      annotations:
+        openshift.io/generated-by: OpenShiftNewApp
+        template.alpha.openshift.io/wait-for-ready: "true"
+      creationTimestamp: null
+      labels:
+        app: ${SONAR_SERVICE_NAME}
+        template: postgresql-persistent-template
+      name: postgresql-${SONAR_SERVICE_NAME}
+    spec:
+      replicas: 1
+      selector:
+        name: postgresql-${SONAR_SERVICE_NAME}
+      strategy:
+        activeDeadlineSeconds: 21600
+        recreateParams:
+          timeoutSeconds: 600
+        resources: {}
+        type: Recreate
+      template:
+        metadata:
+          annotations:
+            openshift.io/generated-by: OpenShiftNewApp
+          creationTimestamp: null
+          labels:
+            app: ${SONAR_SERVICE_NAME}
+            name: postgresql-${SONAR_SERVICE_NAME}
+        spec:
+          containers:
+            - env:
+                - name: POSTGRESQL_USER
+                  valueFrom:
+                    secretKeyRef:
+                      key: database-user
+                      name: postgresql-${SONAR_SERVICE_NAME}
+                - name: POSTGRESQL_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      key: database-password
+                      name: postgresql-${SONAR_SERVICE_NAME}
+                - name: POSTGRESQL_DATABASE
+                  valueFrom:
+                    secretKeyRef:
+                      key: database-name
+                      name: postgresql-${SONAR_SERVICE_NAME}
+              image: ' '
+              imagePullPolicy: IfNotPresent
+              livenessProbe:
+                exec:
+                  command:
+                    - /usr/libexec/check-container
+                    - --live
+                failureThreshold: 3
+                initialDelaySeconds: 30
+                periodSeconds: 10
+                successThreshold: 1
+                timeoutSeconds: 10
+              name: postgresql
+              ports:
+                - containerPort: 5432
+                  protocol: TCP
+              readinessProbe:
+                exec:
+                  command:
+                    - /usr/libexec/check-container
+                failureThreshold: 3
+                initialDelaySeconds: 5
+                periodSeconds: 10
+                successThreshold: 1
+                timeoutSeconds: 1
+              resources:
+                limits:
+                  memory: 512Mi
+              securityContext:
+                capabilities: {}
+                privileged: false
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+              volumeMounts:
+                - mountPath: /var/lib/pgsql/data
+                  name: postgresql-${SONAR_SERVICE_NAME}-data
+          dnsPolicy: ClusterFirst
+          restartPolicy: Always
+          schedulerName: default-scheduler
+          securityContext: {}
+          terminationGracePeriodSeconds: 30
+          volumes:
+            - name: postgresql-${SONAR_SERVICE_NAME}-data
+              persistentVolumeClaim:
+                claimName: postgresql-${SONAR_SERVICE_NAME}
+      test: false
+      triggers:
+        - imageChangeParams:
+            automatic: true
+            containerNames:
+              - postgresql
+            from:
+              kind: ImageStreamTag
+              name: postgresql:9.6
+              namespace: openshift
+          type: ImageChange
+        - type: ConfigChange
+    status:
+      availableReplicas: 0
+      latestVersion: 0
+      observedGeneration: 0
+      replicas: 0
+      unavailableReplicas: 0
+      updatedReplicas: 0
+  # SONARQUBE-IMAGAGE
+  - apiVersion: v1
+    kind: Route
+    metadata:
+      annotations:
+        haproxy.router.openshift.io/timeout: 4m
+        template.openshift.io/expose-uri: http://{.spec.host}{.spec.path}
+      labels:
+        router: ${TIPO_ROUTER}
+      name: ${SONAR_SERVICE_NAME}
+    spec:
+      tls:
+        termination: edge
+      to:
+        kind: Service
+        name: ${SONAR_SERVICE_NAME}
+      wildcardPolicy: None
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: ${SONAR_SERVICE_NAME}-data-volume-pvc-0
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 5Gi
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: ${SONAR_SERVICE_NAME}-extensions-plugins-pvc-0
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 2Gi
+  - apiVersion: apps.openshift.io/v1
+    kind: DeploymentConfig
+    metadata:
+      annotations:
+        openshift.io/generated-by: OpenShiftNewApp
+      creationTimestamp: null
+      labels:
+        app: ${SONAR_SERVICE_NAME}
+      name: ${SONAR_SERVICE_NAME}
+    spec:
+      replicas: 1
+      selector:
+        app: ${SONAR_SERVICE_NAME}
+        deploymentconfig: ${SONAR_SERVICE_NAME}
+      strategy:
+        resources: {}
+      template:
+        metadata:
+          annotations:
+            openshift.io/generated-by: OpenShiftNewApp
+          creationTimestamp: null
+          labels:
+            app: ${SONAR_SERVICE_NAME}
+            deploymentconfig: ${SONAR_SERVICE_NAME}
+        spec:
+          containers:
+            - env:
+                - name: SONARQUBE_JDBC_USERNAME
+                  valueFrom:
+                    secretKeyRef:
+                      key: database-user
+                      name: postgresql-${SONAR_SERVICE_NAME}
+                - name: SONARQUBE_JDBC_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      key: database-password
+                      name: postgresql-${SONAR_SERVICE_NAME}
+                - name: SONARQUBE_JDBC_URL
+                  value: jdbc:postgresql://postgresql-${SONAR_SERVICE_NAME}/${POSTGRESQL_DATABASE}
+                - name: TZ
+                  value: ${TZ}
+                - name: SONARQUBE_WEB_JVM_OPTS
+                  value: ${SONARQUBE_WEB_JVM_OPTS}
+              image: openshift/sonarqube-rhel:latest
+              name: ${SONAR_SERVICE_NAME}
+              livenessProbe:
+                exec:
+                  command:
+                    - echo
+                    - ok
+                failureThreshold: 3
+                initialDelaySeconds: 120
+                periodSeconds: 10
+                successThreshold: 1
+                timeoutSeconds: 1
+              readinessProbe:
+                failureThreshold: 3
+                httpGet:
+                  path: /about
+                  port: 9000
+                  scheme: HTTP
+                initialDelaySeconds: 20
+                periodSeconds: 10
+                successThreshold: 1
+                timeoutSeconds: 1
+              ports:
+                - containerPort: 9000
+                  protocol: TCP
+              resources: {}
+              volumeMounts:
+                - mountPath: /opt/sonarqube/data
+                  name: sonarqube-data
+                - mountPath: /opt/sonarqube/truststore/
+                  name: sonarqube-truststore
+                  readOnly: true
+                - mountPath: /opt/sonarqube/data/es6
+                  name: sonarqube-es6
+                - mountPath: /opt/sonarqube/conf/
+                  name: sonarqube-conf
+                  readOnly: true
+                - mountPath: /opt/sonarqube/extensions
+                  name: sonarqube-plugins
+          volumes:
+            - name: sonarqube-data
+              persistentVolumeClaim:
+                claimName: ${SONAR_SERVICE_NAME}-data-volume-pvc-0
+            - name: sonarqube-truststore
+              secret:
+                defaultMode: 420
+                secretName: ${SECRET_TRUSTSTORE}
+            - name: sonarqube-es6
+              emptyDir: {}
+            - name: sonarqube-conf
+              secret:
+                defaultMode: 420
+                secretName: ${SECRET_SONAR_PROPERTIES}
+            - name: sonarqube-plugins
+              persistentVolumeClaim:
+                claimName: ${SONAR_SERVICE_NAME}-extensions-plugins-pvc-0
+      triggers:
+        - type: ConfigChange
+        - imageChangeParams:
+            automatic: true
+            containerNames:
+              - ${SONAR_SERVICE_NAME}
+            from:
+              kind: ImageStreamTag
+              name: sonarqube-rhel:latest
+              namespace: openshift
+          type: ImageChange
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      annotations:
+        openshift.io/generated-by: OpenShiftNewApp
+      creationTimestamp: null
+      labels:
+        app: ${SONAR_SERVICE_NAME}
+      name: ${SONAR_SERVICE_NAME}
+    spec:
+      ports:
+        - name: 9000-tcp
+          port: 9000
+          protocol: TCP
+          targetPort: 9000
+      selector:
+        app: ${SONAR_SERVICE_NAME}
+        deploymentconfig: ${SONAR_SERVICE_NAME}
+    status:
+      loadBalancer: {}
+parameters:
+  - description: The name of the OpenShift Service exposed for the Jenkins container.
+    displayName: Jenkins Service Name
+    name: SONAR_SERVICE_NAME
+    value: sonarqube-persistent
+  - description: Java Time Zone
+    displayName: TZ
+    name: TZ
+    value: "America/Sao_Paulo"
+  - description: Database for SonarQube Server PostgreSQL backend
+    displayName: SonarQube's PostgreSQL Database
+    name: POSTGRESQL_DATABASE
+    required: true
+    value: 'sonar'
+  - description: User for SonarQube Server PostgreSQL backend
+    displayName: SonarQube's PostgreSQL User
+    name: POSTGRESQL_USERNAME
+    required: true
+    value: 'sonar'
+  - description: Password for SonarQube Server PostgreSQL backend
+    displayName: SonarQube's PostgreSQL Password
+    from: '[a-zA-Z0-9]{16}'
+    generate: expression
+    name: POSTGRESQL_PASSWORD
+    required: true
