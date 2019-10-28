@@ -196,8 +196,6 @@ objects:
       annotations:
         haproxy.router.openshift.io/timeout: 4m
         template.openshift.io/expose-uri: http://{.spec.host}{.spec.path}
-      labels:
-        router: ${TIPO_ROUTER}
       name: ${SONAR_SERVICE_NAME}
     spec:
       tls:
