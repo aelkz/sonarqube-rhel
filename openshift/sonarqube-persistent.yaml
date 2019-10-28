@@ -375,3 +375,7 @@ parameters:
     generate: expression
     name: POSTGRESQL_PASSWORD
     required: true
+  - description: sonar-properties secret
+    displayName: SECRET_SONAR_PROPERTIES
+    name: SECRET_SONAR_PROPERTIES
+    value: "sonarqube-properties"
