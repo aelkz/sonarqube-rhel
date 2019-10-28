@@ -296,9 +296,6 @@ objects:
               volumeMounts:
                 - mountPath: /opt/sonarqube/data
                   name: sonarqube-data
-                - mountPath: /opt/sonarqube/truststore/
-                  name: sonarqube-truststore
-                  readOnly: true
                 - mountPath: /opt/sonarqube/data/es6
                   name: sonarqube-es6
                 - mountPath: /opt/sonarqube/conf/
