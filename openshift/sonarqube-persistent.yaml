@@ -379,4 +379,4 @@ parameters:
   - description: setting additional JVM options such as the max memory -
     displayName: SONARQUBE_WEB_JVM_OPTS
     name: SONARQUBE_WEB_JVM_OPTS
-    value: "-XX:-UseConcMarkSweepGC -XX:-UseCMSInitiatingOccupancyOnly -XX:+UseG1GC -XX:InitiatingHeapOccupancyPercent=75 -XX:+AlwaysPreTouch -Djava.awt.headless=true -Dfile.encoding=UTF-8"
+    value: "-XX:-UseCMSInitiatingOccupancyOnly -XX:+UseG1GC -XX:InitiatingHeapOccupancyPercent=75 -XX:+AlwaysPreTouch -Djava.awt.headless=true -Dfile.encoding=UTF-8"
