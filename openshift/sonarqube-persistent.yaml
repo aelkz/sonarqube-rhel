@@ -310,10 +310,6 @@ objects:
             - name: sonarqube-data
               persistentVolumeClaim:
                 claimName: ${SONAR_SERVICE_NAME}-data-volume-pvc-0
-            - name: sonarqube-truststore
-              secret:
-                defaultMode: 420
-                secretName: ${SECRET_TRUSTSTORE}
             - name: sonarqube-es6
               emptyDir: {}
             - name: sonarqube-conf
